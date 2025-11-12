@@ -4,9 +4,17 @@
  * PHP Command Line Functions
  * 
  * @author garry
- * @version 1.00
+ * @version 1.02 (November 12, 2025)
  * @link https://github.com/garrylie/php-clif
  */
+
+$GLOBALS['clif_start'] = microtime(true);
+
+register_shutdown_function('clif_shutdown');
+
+function clif_shutdown() {
+	printf("Script execution time: %s\n", cc('italic 159', round(microtime(true) - $GLOBALS['clif_start'], 3) . ' sec.'));
+}
 
 function cc($format = 0, $text = '') {
 	if (empty($format)) return "\e[0m";
@@ -107,20 +115,60 @@ function askToContinue($text = 'Продолжить?') {
 	echo "\n";
 }
 
-function fatal_error($str1, $str2 = '') {
-	$cols = exec('tput cols');
-	printf("%s\n", cc(196, str_repeat('-', $cols)));
-	if (empty($str1)) $str1 = 'Неизвестная ошибка';
-	if (empty($str2)) {
-		printf("%s\n", cc(196, $str1));
-	} else {
-		printf("%s: %s\n", $str1, cc(196, $str2));
+function fatal_error($errstr, $str2 = '') {
+	$cols = intval(exec('tput cols'));
+
+	$errtitle = 'Fatal Error';
+
+	if (empty($errstr)) $errstr = 'Неизвестная ошибка';
+	if (!empty($str2)) {
+		$errtitle = $errstr;
+		$errstr = $str2;
 	}
-	printf("%s\n", cc(196, str_repeat('-', $cols)));
+	$errstr_length = mb_strlen($errstr);
+	if ($errstr_length > $cols)
+		$errstr_length = $cols - 4;
+	$errstr_length += 2;
+
+	$border_color = 196;
+
+	printf(
+		"\n%s %s %s%s%s\n",
+		cc($border_color, '╭─['),
+		cc('bold underline 226', $errtitle),
+		cc($border_color, ']'),
+		cc($border_color, str_repeat('─', $errstr_length - mb_strlen($errtitle) - 5)),
+		cc($border_color, '╮')
+	);
+	if (mb_strlen($errstr) > $cols - 4) {
+		$arrstr = str_split($errstr, $cols - 4);
+		foreach ($arrstr as $errstr) {
+			printf(
+				"%s %s%s %s\n",
+				cc($border_color, '│'),
+				cc('230 italic', $errstr),
+				str_repeat(' ', $cols - mb_strlen($errstr) - 4),
+				cc($border_color, '│')
+			);
+		}
+	} else {
+		printf(
+			"%s %s %s\n",
+			cc($border_color, '│'),
+			cc('230 italic', $errstr),
+			cc($border_color, '│')
+		);
+	}
+	printf(
+		"%s%s%s\n",
+		cc($border_color, '╰'),
+		cc($border_color, str_repeat('─', $errstr_length)),
+		cc($border_color, '╯')
+	);
 	exit();
 }
 
-function script_init($title = null) {
+function script_init($title = null, $description = null) {
 
 	global $argv;
 
@@ -131,7 +179,7 @@ function script_init($title = null) {
 			$title = $_SERVER['PHP_SCRIPT'];
 	}
 
-	motd($title);
+	motd($title, $description);
 
 	if (!empty($argv)) {
 		foreach ($argv as $key => $arg) {
@@ -144,9 +192,11 @@ function script_init($title = null) {
 			} elseif (preg_match('/^-([^-]{1}.*)$/', $arg, $m)) {
 				$modes = array_merge($modes, str_split($m[1]));
 			} else {
-				$last_mod = end($modes);
-				if (empty($arguments[$last_mod]))
-					$arguments[$last_mod] = $arg;
+				if (!empty($modes)) {
+					$last_mod = end($modes);
+					if (empty($arguments[$last_mod]))
+						$arguments[$last_mod] = $arg;
+				}
 				$parameter = $arg;
 			}
 		}
@@ -158,12 +208,48 @@ function script_init($title = null) {
 
 }
 
-function motd($title) {
-	printf("Script initialized: %s\n", cc(226, $title));
+function motd($title, $description = null) {
+
+	$cols = intval(`tput cols`);
+	$length = mb_strlen($title);
+
+	if ($length > $cols)
+		$length = $cols - 2;
+
+	$length += 2;
+
+	$title_color = 'bold 226';
+
+	if (empty($description)) {
+		printf("╭%s╮\n", str_repeat('─', $length));
+		printf("│ %s │\n", cc($title_color, $title));
+		printf("╰%s╯\n", str_repeat('─', $length));
+	} else {
+
+		if (is_array($description))
+			$description = implode("\n", $description);
+
+		$max_desc_length = 0;
+		foreach (explode("\n", $description) as $description_line) {
+			$desc_length = mb_strlen($description_line);
+			if ($desc_length > $cols)
+				$desc_length = $cols - 2;
+			$desc_length += 2;
+			if ($desc_length > $max_desc_length)
+				$max_desc_length = $desc_length;
+		}
+
+		printf("╭─[ %s ]%s╮\n", cc($title_color, $title), str_repeat('─', $max_desc_length - $length - 3));
+		foreach (explode("\n", $description) as $description_line)
+			printf("│ %s%s │\n", cc('229 italic', $description_line), str_repeat(' ', $max_desc_length - mb_strlen($description_line) - 2));
+		printf("╰%s╯\n", str_repeat('─', $max_desc_length));
+	}
+
 }
 
 function hasMode($mode) {
 	if (!defined('SCRIPT_MODS')) fatal_error('Script is not initialized');
+	if (!SCRIPT_MODS) return false;
 	if (is_array($mode)) {
 		foreach ($mode as $m)
 			if (in_array($m, SCRIPT_MODS)) return true;
@@ -196,4 +282,76 @@ function getArgument($arg) {
 function getParameter() {
 	if (!defined('SCRIPT_PARAM')) fatal_error('Script is not initialized');
 	return SCRIPT_PARAM;
+}
+
+/**
+ * ╔════════╗
+ * ║ mysqli ║
+ * ╚════════╝
+ */
+
+function db_connect($login, $password, $dbname = null, $host = 'localhost') {
+	$start = microtime(true);
+	printf("[mysqli] Connecting to database as %s", cc(226, $login));
+
+	if (empty($dbname)) $dbname = $login;
+	$GLOBALS['clif_mysqli'] = new mysqli($host, $login, $password, $dbname);
+	if ($GLOBALS['clif_mysqli']->connect_error) {
+		print(PHP_EOL);
+		fatal_error('mysqli connection error', $GLOBALS['clif_mysqli']->connect_error);
+	}
+	$time = microtime(true) - $start;
+	$sec = 0;
+	for ($i=3; $i <= 7; $i++)
+		if (!$sec)
+			$sec = round($time, $i);
+		else 
+			break;
+	printf(": %s sec.\n", $sec);
+
+}
+
+function db_query($sql, ...$param) {
+	if (empty($GLOBALS['clif_mysqli'])) fatal_error('Database connection not initialized!');
+	try {
+		if ($statement = $GLOBALS['clif_mysqli']->prepare($sql)) {
+			$bind = array();
+			if ($param) {
+				foreach ($param as $key => $value) {
+					$bind[] = &$param[$key];
+				}
+				call_user_func_array(array($statement, 'bind_param'), $bind);
+			}
+			if ($statement->execute()) {
+
+				if (!preg_match('/^(SELECT|DESC|SHOW)/', ltrim($sql)))
+					return mysqli_affected_rows($GLOBALS['clif_mysqli']);
+
+				if ($result = $statement->get_result()) {
+					if (!$result->num_rows) return 0;
+					return mysqli_fetch_all($result, MYSQLI_ASSOC);
+				} else {
+					return false;
+				}
+			} else {
+				printf("SQL: %s\n\nParameters:\n%s\n\n", cc(50, $sql), print_r($param, true));
+				fatal_error('Query execution error', $statement->error);
+			}
+		} else {
+			printf("SQL: %s\n\nParameters:\n%s\n\n", cc(50, $sql), print_r($param, true));
+			fatal_error('Query execution error', $GLOBALS['clif_mysqli']->error);
+		}
+	} catch (Exception $e) {
+		fatal_error($e->getMessage());
+	}
+}
+
+function db_last_insert_id() {
+	if (empty($GLOBALS['clif_mysqli'])) fatal_error('Database connection not initialized!');
+	if ($result = $GLOBALS['clif_mysqli']->query("SELECT LAST_INSERT_ID() AS LAST_INSERT_ID")) {
+		if ($object = $result->fetch_object()) {
+			return $object->LAST_INSERT_ID;
+		}
+	}
+	return null;
 }
