@@ -545,6 +545,11 @@ function script_init($title = null, $description = null) {
 			}
 		}
 
+		// Legacy PHP Support
+		if (empty($modes)) $modes = null;
+		if (empty($arguments)) $arguments = null;
+		if (empty($parameter)) $parameter = null;
+
 		define('SCRIPT_MODS', $modes);
 		define('SCRIPT_ARGS', $arguments);
 		define('SCRIPT_PARAM', $parameter);
