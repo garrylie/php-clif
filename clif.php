@@ -37,6 +37,7 @@ function clif_shutdown() {
 }
 
 function clif_error_handler($errno, $errstr, $errfile, $errline) {
+	$errstr = trim($errstr);
 	$exit = true;
 	if (preg_match('/^file_get_contents/', $errstr)) $exit = false;
 	if (strpos($errstr, 'zlib_decode(): data error') !== false) $exit = false;
@@ -140,11 +141,13 @@ function box_length(...$param) {
 	foreach ($param as $key => $p) {
 		if (!$key) $p .= ' [] '; // header is separated by spaces and brackets
 		if (is_array($p)) {
-			foreach ($p as $s)
-				$all_text_data = array_merge($all_text_data, explode("\n", $s));
+			foreach ($p as $s) {
+				if ($s)
+					$all_text_data = array_merge($all_text_data, explode("\n", $s));
+			}
 		} else {
-			$all_text_data = array_merge($all_text_data, explode("\n", $p));
-			// $all_text_data[] = $p;
+			if ($p)
+				$all_text_data = array_merge($all_text_data, explode("\n", $p));
 		}
 	}
 
@@ -380,17 +383,21 @@ function cc_strip_tags($string) {
 	return preg_replace('~</?cc[^>]*>~', '', $string);
 }
 
-function trans_choice($titles, $number, $delimiter = '/') {
-	$abs = abs($number);
-	$cases = [2,0,1,1,1,2];
-	return sprintf(explode($delimiter, $titles)[ ($abs%100 > 4 && $abs%100 < 20) ? 2 : $cases[min($abs%10, 5)] ], $number);
+if (!function_exists('trans_choice')) {
+	function trans_choice($titles, $number, $delimiter = '/') {
+		$abs = abs($number);
+		$cases = [2,0,1,1,1,2];
+		return sprintf(explode($delimiter, $titles)[ ($abs%100 > 4 && $abs%100 < 20) ? 2 : $cases[min($abs%10, 5)] ], $number);
+	}
 }
 
-function human_filesize($bytes, $dec = 2) {
-	$size = array('байт', 'КБ', 'МБ', 'ГБ');
-	$factor = floor((strlen($bytes) - 1) / 3);
-	if ($factor == 0) $dec = 0;
-	return sprintf("%.{$dec}f %s", $bytes / (1024 ** $factor), $size[$factor]);
+if (!function_exists('human_filesize')) {
+	function human_filesize($bytes, $dec = 2) {
+		$size = array('байт', 'КБ', 'МБ', 'ГБ');
+		$factor = floor((strlen($bytes) - 1) / 3);
+		if ($factor == 0) $dec = 0;
+		return sprintf("%.{$dec}f %s", $bytes / (1024 ** $factor), $size[$factor]);
+	}
 }
 
 function cd(...$vars) {
